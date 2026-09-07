@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -41,6 +41,12 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] =
     useState<string | null>(null);
+
+  const [eventId, setEventId] = useState('');
+  const [type, setType] = useState('order.created');
+  const [orderId, setOrderId] = useState('');
+  const [simulation, setSimulation] = useState('ok');
+  const [sending, setSending] = useState(false);
 
   async function loadEvents() {
     try {
@@ -121,12 +127,70 @@ export default function Home() {
       }
 
       await loadEvents();
-
     } catch (error) {
       console.error(error);
       alert('Failed to retry event');
     } finally {
       setRetrying(null);
+    }
+  }
+
+  async function sendWebhook() {
+    if (!eventId.trim()) {
+      alert('Event ID is required');
+      return;
+    }
+
+    if (!orderId.trim()) {
+      alert('Order ID is required');
+      return;
+    }
+
+    setSending(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/webhooks`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            eventId: eventId.trim(),
+            type: type.trim() || 'order.created',
+            data: {
+              orderId: orderId.trim(),
+              simulation,
+            },
+          }),
+        },
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+            'Failed to send webhook',
+        );
+      }
+
+      setEventId('');
+      setOrderId('');
+
+      await loadEvents();
+
+      alert(
+        result.duplicate
+          ? 'Duplicate webhook accepted safely.'
+          : 'Webhook accepted.',
+      );
+    } catch (error) {
+      console.error(error);
+      alert('Failed to send webhook');
+    } finally {
+      setSending(false);
     }
   }
 
@@ -160,6 +224,107 @@ export default function Home() {
       <p>
         Reliable Webhook Processor
       </p>
+
+      <section
+        style={{
+          marginTop: '25px',
+          padding: '20px',
+          border: '1px solid #ccc',
+          borderRadius: '8px',
+          background: '#fafafa',
+        }}
+      >
+        <h2>Send Test Webhook</h2>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns:
+              'repeat(2, minmax(200px, 1fr))',
+            gap: '12px',
+            maxWidth: '700px',
+          }}
+        >
+          <label>
+            Event ID
+            <input
+              value={eventId}
+              onChange={(e) =>
+                setEventId(e.target.value)
+              }
+              placeholder="evt-001"
+              style={inputStyle}
+            />
+          </label>
+
+          <label>
+            Type
+            <input
+              value={type}
+              onChange={(e) =>
+                setType(e.target.value)
+              }
+              placeholder="order.created"
+              style={inputStyle}
+            />
+          </label>
+
+          <label>
+            Order ID
+            <input
+              value={orderId}
+              onChange={(e) =>
+                setOrderId(e.target.value)
+              }
+              placeholder="order-001"
+              style={inputStyle}
+            />
+          </label>
+
+          <label>
+            Simulation
+            <select
+              value={simulation}
+              onChange={(e) =>
+                setSimulation(e.target.value)
+              }
+              style={inputStyle}
+            >
+              <option value="ok">
+                ok
+              </option>
+
+              <option value="fail_then_succeed:2">
+                fail_then_succeed:2
+              </option>
+
+              <option value="always_fail">
+                always_fail
+              </option>
+
+              <option value="slow:20">
+                slow:20
+              </option>
+            </select>
+          </label>
+        </div>
+
+        <button
+          onClick={sendWebhook}
+          disabled={sending}
+          style={{
+            marginTop: '15px',
+            padding: '10px 18px',
+            cursor: sending
+              ? 'not-allowed'
+              : 'pointer',
+          }}
+        >
+          {sending
+            ? 'Sending...'
+            : 'Send Webhook'}
+        </button>
+      </section>
 
       {loading ? (
         <p>Loading events...</p>
@@ -211,8 +376,8 @@ export default function Home() {
 
           <tbody>
             {events.map((event) => (
-              <>
-                <tr key={event.id}>
+              <Fragment key={event.id}>
+                <tr>
                   <td style={cellStyle}>
                     <button
                       onClick={() =>
@@ -443,7 +608,7 @@ export default function Home() {
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -462,4 +627,12 @@ const headerStyle = {
 const cellStyle = {
   border: '1px solid #ccc',
   padding: '10px',
+};
+
+const inputStyle = {
+  display: 'block',
+  width: '100%',
+  boxSizing: 'border-box' as const,
+  marginTop: '5px',
+  padding: '9px',
 };
