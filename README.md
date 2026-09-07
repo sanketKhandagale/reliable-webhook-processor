@@ -10,6 +10,48 @@ Workers poll PostgreSQL for pending events and claim them using row locking and 
 
 Two worker processes can run concurrently. The business result is stored in `processed_orders`.
 
+
+```text
+                         POST /webhooks
+                                |
+                                v
+                         +-------------+
+                         |   NestJS    |
+                         |   Backend   |
+                         +------+------+
+                                |
+                                v
+                         +-------------+
+                         | PostgreSQL  |
+                         |             |
+                         | webhook_    |
+                         | events      |
+                         |             |
+                         | processing_ |
+                         | attempts    |
+                         |             |
+                         | processed_  |
+                         | orders      |
+                         +------+------+
+                                |
+                    +-----------+-----------+
+                    |                       |
+                    v                       v
+              +-----------+           +-----------+
+              |  Worker 1 |           |  Worker 2 |
+              +-----------+           +-----------+
+                    |                       |
+                    +-----------+-----------+
+                                |
+                                v
+                         Business action
+                                |
+                                v
+                       processed_orders
+                                |
+                                v
+                       Next.js Operations UI
+
 ## Correctness Guarantees
 
 - **Durable ingestion:** events are persisted before the webhook request is acknowledged.
